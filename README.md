@@ -1,12 +1,12 @@
 # FlowGrid — Dynamic Traffic Congestion Analytics Using Fenwick Tree
 
 > **Data Structures & Algorithms (DSA) Second-Year CSE Case Study Project**  
-> **Evaluation Mode:** Automatic Benchmark Demonstration (Explicitly Non-Menu-Driven)  
-> **Engine:** 1-Based Fenwick Tree (Binary Indexed Tree / BIT)
+> **Evaluation Mode:** Automatic Benchmark Demonstration (Explicitly Non-Menu-Driven) & Live Web Integration  
+> **Engine:** 1-Based Fenwick Tree (Binary Indexed Tree / BIT) Core implemented in C++17
 
 ---
 
-## 1. Project Overview
+## 1. Project Overview & Team Contributions
 
 **FlowGrid** is a dynamic traffic congestion analytics system designed to monitor urban vehicular corridors in real time. In metropolitan transportation grids, road segments experience rapid fluctuations in traffic density due to signals, lane closures, accidents, and rush-hour surges.
 
@@ -14,13 +14,64 @@ Traffic management centers require two fundamental operations:
 1. **Dynamic Point Updates ($O(\log n)$):** Ingest real-time vehicle counts from road sensors as conditions change.
 2. **Corridor Range Queries ($O(\log n)$):** Query cumulative vehicle volume over any sub-corridor $[L \dots R]$ and detect whether density exceeds safety thresholds (`NORMAL` vs `POTENTIALLY CONGESTED`).
 
-This repository contains two implementations:
-- **Part 1 (C++ Core):** A high-performance, non-menu-driven C++ demonstration program (`src/main.cpp`) executing an automated verification benchmark with boundary safety validation.
-- **Part 2 (Web Dashboard):** A client-side visual dashboard (`app/index.html`, `app/style.css`, `app/script.js`) with interactive controls, dynamic road segment cards, Fenwick Tree hierarchy inspection, and an activity audit log.
+### Team Work Division
+- **Member 1 (Traffic Data Management & Tree Initialization):**
+  - Formulated 1-based indexing data representation for 8 corridor segments.
+  - Implemented `initializeData()` and linear-time $O(n)$ Fenwick Tree construction (`buildFenwick()`) via forward propagation.
+- **Member 2 (Core Bitwise & Tree Operations):**
+  - Implemented bitwise `lowbit(x) = x & (-x)`.
+  - Implemented dynamic point updates (`update(idx, delta)`) and absolute value setting (`setCount(idx, newCount)`).
+  - Implemented prefix sum accumulation (`prefixSum(idx)`).
+- **Member 3 (Range Queries & Congestion Detection):**
+  - Implemented range queries via principle of inclusion-exclusion: `rangeSum(L, R) = prefixSum(R) - prefixSum(L - 1)`.
+  - Implemented threshold classification (`detectCongestion()`).
+  - Authored automated non-menu-driven benchmark demonstration covering Steps 1 to 8.
+- **Member 4 (Dashboard Improvements, Backend Integration & Testing):**
+  - Designed zero-dependency Python HTTP server (`server.py`) bridging browser requests to the compiled C++ executable.
+  - Added CLI JSON interface to `src/main.cpp` for live queries and updates while 100% preserving default automated benchmark demo.
+  - Enhanced dashboard UI with interactive segment selection, real-time range tags, ancestor path visualization, and backend health indicators.
+  - Enforced consistent congestion logic (`< 55` $\implies$ `NORMAL`, `$\ge 55$` $\implies$ `POTENTIALLY CONGESTED`).
+  - Authored comprehensive 32-point automated test suite (`tests/test_flowgrid.py`).
 
 ---
 
-## 2. Theoretical Background: The Fenwick Tree (BIT)
+## 2. System Architecture & Communication Flow
+
+```
++-------------------------------------------------------------------------+
+|                       FlowGrid Web Dashboard (UI)                       |
+|   - 8-Segment Interactive Grid      - Range Query & Congestion Pill     |
+|   - Point Update Controls           - BIT Array & Hierarchy Inspector   |
++-------------------------------------------------------------------------+
+                                    |
+                    HTTP REST APIs  |  JSON Requests / Responses
+              (GET /api/status, GET /api/state, POST /api/query, etc.)
+                                    v
++-------------------------------------------------------------------------+
+|                  Python 3 Lightweight HTTP Server                       |
+|                   (server.py — Python Standard Library)                 |
+|   - Serves static assets from app/                                      |
+|   - Maintains server corridor state                                     |
+|   - Safely invokes compiled C++ executable via subprocess               |
++-------------------------------------------------------------------------+
+                                    |
+                    CLI Subprocess  |  Arguments: --query, --update, etc.
+                    Standard I/O    |  Output: Structured JSON
+                                    v
++-------------------------------------------------------------------------+
+|                  Compiled C++ Fenwick Tree Engine                       |
+|                   (bin/traffic_analytics.exe)                           |
+|   - O(1) lowbit(x) = x & (-x)                                           |
+|   - O(n) buildFenwick() forward propagation                             |
+|   - O(log n) update() and setCount()                                    |
+|   - O(log n) prefixSum() and rangeSum()                                 |
+|   - O(1) detectCongestion() (< 55 vs >= 55)                             |
++-------------------------------------------------------------------------+
+```
+
+---
+
+## 3. Theoretical Background: The Fenwick Tree (BIT)
 
 A **Fenwick Tree** (also known as a **Binary Indexed Tree** or **BIT**), proposed by Peter Fenwick in 1994, is an array-based data structure that efficiently computes prefix sums and supports point modifications in $O(\log n)$ time while using strictly $O(n)$ space.
 
@@ -36,8 +87,6 @@ In a 1-based Fenwick Tree of size $n = 8$, each node $\text{bit}[i]$ stores the 
 
 $$[i - \text{lowbit}(i) + 1 \dots i]$$
 
-The length of this interval is exactly $\text{lowbit}(i)$.
-
 | Index $i$ | Binary ($i$) | $\text{lowbit}(i)$ | Responsibility Interval | Elements Included | Tree Role |
 | :---: | :---: | :---: | :---: | :---: | :--- |
 | **1** | `0001` | 1 | $[1 \dots 1]$ | $\text{traffic}[1]$ | Leaf (odd index) |
@@ -51,7 +100,7 @@ The length of this interval is exactly $\text{lowbit}(i)$.
 
 ---
 
-## 3. Algorithmic Operations & Complexities
+## 4. Algorithmic Operations & Complexities
 
 ### Comparative Complexity Analysis
 
@@ -65,7 +114,6 @@ The length of this interval is exactly $\text{lowbit}(i)$.
 ### Algorithmic Routines
 
 1. **`buildFenwick()` — $O(n)$ Construction:**
-   Instead of calling `update()` $n$ times ($O(n \log n)$), the tree is built in linear $O(n)$ time by pushing the value of each node $\text{bit}[i]$ forward to its direct parent $i + \text{lowbit}(i)$:
    ```cpp
    for (int i = 1; i <= n; ++i) {
        bit[i] += trafficCounts[i];
@@ -80,21 +128,21 @@ The length of this interval is exactly $\text{lowbit}(i)$.
    Adds `delta` to $\text{bit}[i]$ and ascends the tree via $i \leftarrow i + \text{lowbit}(i)$ until $i > n$.
 
 3. **`setCount(idx, newCount)` — $O(\log n)$ Absolute Setting:**
-   Computes $\Delta = \text{newCount} - \text{trafficCounts}[idx]$, updates the raw array $\text{trafficCounts}[idx] = \text{newCount}$, and executes `update(idx, delta)`.
+   Computes $\Delta = \text{newCount} - \text{trafficCounts}[idx]$, updates the raw array $\text{trafficCounts}[idx] = \text{newCount}$, and calls `update(idx, delta)`.
 
 4. **`prefixSum(idx)` — $O(\log n)$ Cumulative Sum:**
    Accumulates $\text{bit}[i]$ and descends the tree via $i \leftarrow i - \text{lowbit}(i)$ until $i = 0$.
 
 5. **`rangeSum(left, right)` — $O(\log n)$ Range Query:**
-   Uses the principle of inclusion-exclusion:
    $$\text{rangeSum}(L, R) = \text{prefixSum}(R) - \text{prefixSum}(L - 1)$$
 
 6. **`detectCongestion(currentSum, threshold)` — $O(1)$ Threshold Classification:**
-   Returns `"POTENTIALLY CONGESTED"` if $\text{currentSum} > \text{threshold}$, otherwise `"NORMAL"`.
+   - **`NORMAL`** if $\text{currentSum} < \text{threshold}$.
+   - **`POTENTIALLY CONGESTED`** if $\text{currentSum} \ge \text{threshold}$.
 
 ---
 
-## 4. Benchmark Demonstration (Exact Case Study Numbers)
+## 5. Benchmark Demonstration (Exact Case Study Numbers)
 
 ### Initial State
 - **Segments 1 to 8:** `[12, 7, 15, 9, 20, 5, 11, 8]`
@@ -106,7 +154,7 @@ The length of this interval is exactly $\text{lowbit}(i)$.
    $$\text{prefixSum}(6) = \text{bit}[6] + \text{bit}[4] = 25 + 43 = 68$$
    $$\text{prefixSum}(2) = \text{bit}[2] = 19$$
    $$\text{rangeSum}(3, 6) = 68 - 19 = \mathbf{49}$$
-   - Since $49 \le 55 \implies$ **`NORMAL`** $\checkmark$
+   - Since $49 < 55 \implies$ **`NORMAL`** $\checkmark$
 
 2. **Dynamic Update:** Segment 5 updated from $20$ to $34$ ($\Delta = +14$).
    - Traversal path updated: $\text{bit}[5]$, $\text{bit}[6]$, $\text{bit}[8]$.
@@ -116,102 +164,128 @@ The length of this interval is exactly $\text{lowbit}(i)$.
    $$\text{prefixSum}(6) = \text{bit}[6] + \text{bit}[4] = 39 + 43 = 82$$
    $$\text{prefixSum}(2) = \text{bit}[2] = 19$$
    $$\text{rangeSum}(3, 6) = 82 - 19 = \mathbf{63}$$
-   - Since $63 > 55 \implies$ **`POTENTIALLY CONGESTED`** $\checkmark$
+   - Since $63 \ge 55 \implies$ **`POTENTIALLY CONGESTED`** $\checkmark$
 
 ---
 
-## 5. Workspace File Structure
+## 6. Workspace File Structure
 
 ```
 FlowGrid_Traffic_Analytics/
 ├── .gitignore                          # Git exclusions (build binaries, caches)
 ├── README.md                           # Comprehensive documentation & evaluation guide
 ├── generate_pptx.py                    # Standalone PowerPoint generator script
-├── app/                                # Part 2: Interactive Web Application
-│   ├── index.html                      # Modern semantic dashboard markup
-│   ├── style.css                       # Responsive dark glassmorphism styling
-│   └── script.js                       # 1-based JavaScript Fenwick Tree engine
+├── server.py                           # Lightweight Python HTTP server & C++ bridge (Member 4)
+├── app/                                # Interactive Web Application
+│   ├── index.html                      # Semantic dashboard markup with live C++ connection status
+│   ├── style.css                       # Responsive dark-theme styling, animations & status indicators
+│   └── script.js                       # Frontend controller connected to C++ backend via REST API
 ├── bin/                                # Compiled binaries directory
-│   └── traffic_analytics.exe           # Compiled C++ demonstration executable
-├── presentation/                       # Part 4: Case Study Presentation
+│   └── traffic_analytics.exe           # Statically compiled C++17 Fenwick Tree executable
+├── presentation/                       # Case Study Presentation
 │   └── Fenwick_Tree_Case_Study.pptx    # 14-slide professional PowerPoint deck
-├── src/                                # Part 1: C++ Implementation
-│   └── main.cpp                        # Standard C++ Fenwick Tree engine & demo
-└── tests/                              # Part 3: Verification Suite
-    └── test_cases.md                   # Complete test matrix & verified output logs
+├── src/                                # C++ Implementation
+│   └── main.cpp                        # Standard C++ Fenwick Tree engine, demo & CLI interface
+└── tests/                              # Verification Suite
+    ├── test_cases.md                   # 32-case test matrix & verified output logs
+    └── test_flowgrid.py                # Automated integration test runner (Member 4)
 ```
 
 ---
 
-## 6. Compilation & Execution Instructions
+## 7. Compilation & Execution Instructions
 
-### A. C++ Core Demonstration Program
+### A. Prerequisites
+- **C++ Compiler:** Any standard C++ compiler supporting C++17 (`g++`, `clang++`, or MSVC `cl.exe`).
+- **Python:** Python 3.8+ (standard library only; no `pip` packages required).
+- **Web Browser:** Any modern web browser (Chrome, Edge, Firefox, Safari).
 
-#### Prerequisites
-- Any standard C++ compiler supporting C++17 or C++20 (`g++`, `clang++`, or MSVC `cl.exe`).
+---
 
-#### Compilation Command
-Open PowerShell or your preferred terminal in the project root:
+### B. Compiling the C++ Fenwick Tree Engine
+
+From the project root (`FlowGrid_Traffic_Analytics/`), run:
 
 ```powershell
-# Using g++ (MinGW / MSYS2 / Linux GCC)
-g++ -std=c++17 -Wall -Wextra -O2 src/main.cpp -o bin/traffic_analytics.exe
+# Using g++ (MinGW / GCC) with static linking to eliminate external DLL dependencies:
+g++ -std=c++17 -Wall -Wextra -O2 -static -static-libgcc -static-libstdc++ src/main.cpp -o bin/traffic_analytics.exe
 ```
 
-#### Execution Command
+---
+
+### C. Running the Standalone C++ Automated Benchmark
+
+The C++ program runs the complete automated demonstration when invoked without arguments:
+
 ```powershell
 .\bin\traffic_analytics.exe
 ```
 
-> **Note:** The program runs an automatic, non-menu-driven benchmark demonstration that outputs every calculation step, verifies initial and updated BIT arrays, tests threshold classifications, and executes edge-case validations.
+CLI modes for scripted queries:
+```powershell
+# Query range [3..6] with threshold 55:
+.\bin\traffic_analytics.exe --query 3 6 55 12 7 15 9 20 5 11 8
+
+# Update segment 5 to count 34:
+.\bin\traffic_analytics.exe --update 5 34 12 7 15 9 20 5 11 8
+
+# Query current BIT state:
+.\bin\traffic_analytics.exe --state 12 7 15 9 20 5 11 8
+```
 
 ---
 
-### B. FlowGrid Web Dashboard
+### D. Starting the FlowGrid Backend Server & Dashboard
 
-#### Prerequisites
-- Any modern web browser (Google Chrome, Microsoft Edge, Mozilla Firefox, Safari).
-- **No backend or server required** — runs purely client-side.
-
-#### Opening the Dashboard
-Simply double-click `app/index.html` or run in PowerShell:
+To launch the integrated application:
 
 ```powershell
-Start-Process "app/index.html"
+python server.py
 ```
 
-#### Dashboard Features:
-- **Run Benchmark Demo Button:** Runs an animated 3-step sequence recreating the case study.
-- **Dynamic Segment Cards:** Visual cards displaying real-time traffic volume and density meters.
-- **Point Update Panel:** Enter segment index ($1 \dots 8$) and vehicle count, then see tree ancestors highlight in real time.
-- **Range Query Panel:** Adjust start segment $[L]$, end segment $[R]$, and threshold to evaluate live corridor congestion.
-- **BIT Structural Inspector:** Table detailing binary representations, $\text{lowbit}(i)$, and interval coverage.
-- **Audit Log:** Timestamped log tracking every engine operation.
+Then open your browser to:
+```
+http://127.0.0.1:8000/
+```
+
+#### What happens:
+1. `server.py` starts on port 8000 and serves the dashboard from `app/`.
+2. The browser automatically connects to the backend and displays `C++ Fenwick Core: Connected`.
+3. Clicking **"Run Benchmark Demo"**, **"Apply Update"**, or **"Evaluate"** triggers genuine calls to the compiled C++ `traffic_analytics.exe` binary.
+4. Clicking any road segment card in the corridor grid interactively selects that segment for point updates.
 
 ---
 
-### C. PowerPoint Presentation
+### E. Running the Automated Test Suite
 
-The editable PowerPoint presentation is pre-generated at:
-```
-presentation/Fenwick_Tree_Case_Study.pptx
-```
-It contains 14 structured slides covering the problem statement, objectives, tree representation, mathematical walkthroughs, complexity analysis, test matrix, and limitations.
+To run all 32 automated verification and integration tests:
 
-To regenerate or modify slides programmatically:
 ```powershell
-python generate_pptx.py
+python tests/test_flowgrid.py
 ```
+
+All 32 test cases verify:
+- Initial linear-time construction.
+- Prefix sums across all 8 indices.
+- Corridor range sums ($[3 \dots 6]$, $[5 \dots 5]$, $[1 \dots 8]$).
+- Point updates and ancestor paths.
+- Re-query after updates.
+- Congestion boundary conditions ($< 55$ vs $\ge 55$).
+- Out-of-bounds indices, inverted ranges, and negative counts.
+- Repeated updates ensuring cumulative state integrity.
+- Full HTTP API endpoints (`/api/status`, `/api/state`, `/api/query`, `/api/update`, `/api/reset`).
+- Exact case study numbers ($49 \to 63$).
+- Automated standalone demonstration execution.
 
 ---
 
-## 7. Limitations & Future Roadmap
+## 8. Limitations & Future Roadmap
 
 1. **1D Linear Corridors:**
    - *Current:* Operates on a linear sequence of road segments $[1 \dots n]$.
-   - *Future:* Extend to a 2D Fenwick Tree to monitor $M \times N$ road intersections and spatial urban grids in $O(\log^2 n)$ time.
+   - *Future:* Extend to a 2D Fenwick Tree to monitor $M \times N$ road intersections in $O(\log^2 n)$ time.
 2. **Fixed Segment Capacity:**
-   - *Current:* Fixed array size $n = 8$. Dynamic addition of new segments requires dynamic resizing.
+   - *Current:* Fixed array size $n = 8$. Dynamic addition of new segments requires dynamic vector resizing.
 3. **Range Updates:**
    - *Current:* Optimized for point updates + range queries.
    - *Future:* Implement dual-tree difference encoding ($D[i]$ and $D[i] \times i$) to support both range updates and range queries in $O(\log n)$.
@@ -220,8 +294,8 @@ python generate_pptx.py
 
 ---
 
-## 8. Academic Integrity & Note for Faculty
+## 9. Academic Integrity & Note for Faculty
 
-- **Zero Menu-Driven Code:** Per faculty guidelines, the C++ implementation runs an end-to-end automated verification suite without interactive menus or fragile input prompts.
-- **Separation of Implementations:** The C++ program (`src/main.cpp`) and the JavaScript dashboard (`app/script.js`) are standalone implementations. Both enforce 1-based indexing and match the exact mathematical specifications.
-- **Clean Academic Attribution:** Team member and faculty placeholders are provided on Slide 1 of the PowerPoint deck for student customization.
+- **Preservation of Existing Work:** Members 1, 2, and 3's core data structure implementations and non-menu benchmark demonstration are 100% preserved.
+- **Genuine C++ Integration:** Member 4 connected the web dashboard directly to the compiled C++ executable via a lightweight Python server. The browser does not simulate the Fenwick Tree; all numbers, traversal paths, and congestion classifications are computed by C++ in real time.
+- **Consistent Boundary Classification:** Threshold comparison is strictly unified across C++, the server, and the dashboard ($< 55 \implies$ `NORMAL`, $\ge 55 \implies$ `POTENTIALLY CONGESTED`).
