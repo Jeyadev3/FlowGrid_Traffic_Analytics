@@ -372,12 +372,44 @@ public:
     }
 
     // ========================================================================
-    // MEMBER 3: RANGE SUM CORRIDOR QUERIES (O(log n))
+    // MEMBER 3: RANGE QUERIES & CONGESTION DETECTION (O(log n))
     // ========================================================================
 
     /**
-     * Computes range sum of traffic counts for segments [left, right].
-     * Formula: prefixSum(right) - prefixSum(left - 1)
+     * Member 3 (Task 1 & 5): Corridor Range Sum Query (O(log n))
+     * ----------------------------------------------------------
+     * Computes cumulative vehicular traffic volume across road segments
+     * within the closed interval [left, right] in O(log n) time.
+     * 
+     * Mathematical Formula (Principle of Inclusion-Exclusion):
+     *     rangeSum(L, R) = prefixSum(R) - prefixSum(L - 1)
+     * 
+     * Derivation:
+     *     sum_{k=L}^{R} trafficCounts[k] = sum_{k=1}^{R} trafficCounts[k] - sum_{k=1}^{L-1} trafficCounts[k]
+     * 
+     * Mathematical Trace for Benchmark Dataset (n = 8):
+     *   1. Baseline Query [3 .. 6] before update:
+     *      - prefixSum(6) = bit[6] + bit[4] = 25 + 43 = 68
+     *      - prefixSum(2) = bit[2] = 19
+     *      - rangeSum(3, 6) = 68 - 19 = 49 vehicles.
+     *   2. Re-Query [3 .. 6] after Segment 5 update (20 -> 34, delta = +14):
+     *      - prefixSum(6) = bit[6] + bit[4] = 39 + 43 = 82
+     *      - prefixSum(2) = bit[2] = 19
+     *      - rangeSum(3, 6) = 82 - 19 = 63 vehicles.
+     * 
+     * Preconditions & Validations (Task 5):
+     *   1. Lower Bound: left >= 1 (road segments are 1-based; left < 1 is rejected).
+     *   2. Upper Bound: right <= n (corridor length is n; right > n is rejected).
+     *   3. Ordered Range: left <= right (inverted ranges left > right are rejected).
+     *   - If any condition is violated, logs an error to std::cerr and safely returns -1.
+     * 
+     * Complexity:
+     *   - Time Complexity: O(log n) — performs exactly two prefixSum() calls, each O(log n).
+     *   - Space Complexity: O(1) auxiliary space.
+     * 
+     * @param left 1-based start segment index (L, left >= 1).
+     * @param right 1-based end segment index (R, right <= n).
+     * @return Cumulative traffic volume as 64-bit integer (long long), or -1 if range is invalid.
      */
     long long rangeSum(int left, int right) const {
         if (left < 1 || right > n || left > right) {
@@ -388,18 +420,77 @@ public:
         return prefixSum(right) - prefixSum(left - 1);
     }
 
-    // ========================================================================
-    // MEMBER 4: CONGESTION DETECTION & THRESHOLD CLASSIFICATION (O(1))
-    // ========================================================================
-
     /**
-     * Determines congestion classification based on threshold.
+     * Member 3 (Task 2, 3, 4 & 6): Congestion Detection & Threshold Classification (O(1))
+     * -----------------------------------------------------------------------------------
+     * Evaluates traffic congestion status based on cumulative vehicular volume and threshold.
+     * 
+     * Classification Logic (Task 3 & 4):
+     *   - NORMAL: queried traffic is strictly below configured threshold (currentSum < threshold).
+     *   - POTENTIALLY CONGESTED: queried traffic is greater than or equal to threshold (currentSum >= threshold).
+     * 
+     * Input Validation (Task 6):
+     *   - Thresholds must be non-negative (threshold >= 0).
+     *   - Traffic volume sum must be non-negative (currentSum >= 0).
+     *   - Returns "INVALID" and logs an error to std::cerr if invalid input detected.
+     * 
+     * Complexity:
+     *   - Time Complexity: O(1) comparison.
+     *   - Space Complexity: O(1).
+     * 
+     * @param currentSum Cumulative vehicular volume.
+     * @param threshold Configured congestion threshold.
+     * @return "NORMAL", "POTENTIALLY CONGESTED", or "INVALID".
      */
     static std::string detectCongestion(long long currentSum, long long threshold) {
-        if (currentSum > threshold) {
+        if (threshold < 0) {
+            std::cerr << "[Error] Invalid threshold: " << threshold 
+                      << " (Threshold must be non-negative).\n";
+            return "INVALID";
+        }
+        if (currentSum < 0) {
+            std::cerr << "[Error] Invalid traffic volume sum: " << currentSum 
+                      << " (Traffic volume cannot be negative).\n";
+            return "INVALID";
+        }
+        if (currentSum >= threshold) {
             return "POTENTIALLY CONGESTED";
         }
         return "NORMAL";
+    }
+
+    /**
+     * Member 3 (Task 2, 5 & 6): Corridor Range Congestion Detection (O(log n))
+     * ------------------------------------------------------------------------
+     * Computes the cumulative vehicular traffic volume across segments [left, right]
+     * using the existing rangeSum() operation and classifies congestion against
+     * the configured threshold.
+     * 
+     * Preconditions & Validations:
+     *   - Range validated via rangeSum(left, right): 1 <= left <= right <= n.
+     *   - Threshold validated: threshold >= 0.
+     *   - Returns "INVALID" safely if range query or threshold validation fails.
+     * 
+     * Complexity:
+     *   - Time Complexity: O(log n) tree traversal via rangeSum().
+     *   - Space Complexity: O(1) auxiliary space.
+     * 
+     * @param left 1-based start segment index (L).
+     * @param right 1-based end segment index (R).
+     * @param threshold Configured congestion threshold.
+     * @return "NORMAL", "POTENTIALLY CONGESTED", or "INVALID".
+     */
+    std::string detectCongestion(int left, int right, long long threshold) const {
+        if (threshold < 0) {
+            std::cerr << "[Error] Invalid threshold: " << threshold 
+                      << " (Threshold must be non-negative).\n";
+            return "INVALID";
+        }
+        long long volume = rangeSum(left, right);
+        if (volume < 0) {
+            return "INVALID";
+        }
+        return detectCongestion(volume, threshold);
     }
 
     // ========================================================================
@@ -526,6 +617,10 @@ int main() {
     std::cout << "Benchmark Check          : " 
               << (passQ1 ? "[PASS] Expected 49 and NORMAL" : "[FAIL] Output deviated") << "\n";
     assert(ft.prefixSum(6) == 68); // Member 2: prefixSum(6) before update must equal 68
+    assert(ft.prefixSum(2) == 19); // Member 2: prefixSum(2) before update must equal 19
+    assert(sumQ1 == 49);           // Member 3: rangeSum(3, 6) = 68 - 19 = 49
+    assert(statusQ1 == "NORMAL");  // Member 3: 49 < 55 -> NORMAL
+    assert(ft.detectCongestion(qLeft, qRight, threshold) == "NORMAL"); // Member 3: range congestion detection
 
     // ------------------------------------------------------------------------
     // Dynamic Point Update: Segment 5 from 20 to 34
@@ -570,46 +665,96 @@ int main() {
     bool passQ2 = (sumQ2 == 63 && statusQ2 == "POTENTIALLY CONGESTED");
     std::cout << "Benchmark Check          : " 
               << (passQ2 ? "[PASS] Expected 63 and POTENTIALLY CONGESTED" : "[FAIL] Output deviated") << "\n";
+    assert(ft.prefixSum(6) == 82); // Member 2: prefixSum(6) after update must equal 82
+    assert(ft.prefixSum(2) == 19); // Member 2: prefixSum(2) after update must equal 19
+    assert(sumQ2 == 63);           // Member 3: rangeSum(3, 6) = 82 - 19 = 63
+    assert(statusQ2 == "POTENTIALLY CONGESTED"); // Member 3: 63 >= 55 -> POTENTIALLY CONGESTED
+    assert(ft.detectCongestion(qLeft, qRight, threshold) == "POTENTIALLY CONGESTED");
 
     // ------------------------------------------------------------------------
     // Comprehensive Edge Cases & Safety Validations
     // ------------------------------------------------------------------------
     printSectionHeader("STEP 8: EDGE CASE & SAFETY VALIDATION SUITE");
 
-    // Edge Case A: Single Segment Range Query
+    // Edge Case 1: Single Segment Range Query [5..5]
     long long singleSegSum = ft.rangeSum(5, 5);
     std::cout << "[Edge Case 1] Single Segment Query [5..5]: " << singleSegSum 
               << " (Expected: " << newCount << ") -> " 
               << (singleSegSum == newCount ? "[PASS]" : "[FAIL]") << "\n";
+    assert(singleSegSum == newCount);
 
-    // Edge Case B: Zero Traffic Count Update
+    // Edge Case 2: Zero Traffic Count Update
     ft.setCount(1, 0);
     std::cout << "[Edge Case 2] Zero Traffic Update on Segment 1: " 
               << ft.getTrafficCount(1) << " vehicles -> [PASS]\n";
+    assert(ft.getTrafficCount(1) == 0);
     // Restore
     ft.setCount(1, 12);
+    assert(ft.getTrafficCount(1) == 12);
 
-    // Edge Case C: Out of bounds index
+    // Edge Case 3: Out of bounds index
     std::cout << "[Edge Case 3] Out-of-bounds update index 10:\n";
     bool oobUpdate = ft.setCount(10, 50);
     std::cout << "              Handled Gracefully: " << (!oobUpdate ? "[PASS]" : "[FAIL]") << "\n";
+    assert(!oobUpdate);
 
-    // Edge Case D: Inverted Range (left > right)
+    // Edge Case 4: Inverted Range (left > right) [6..3]
     std::cout << "[Edge Case 4] Inverted Range Query [6..3]:\n";
     long long invSum = ft.rangeSum(6, 3);
     std::cout << "              Handled Gracefully: " << (invSum == -1 ? "[PASS]" : "[FAIL]") << "\n";
+    assert(invSum == -1);
 
-    // Edge Case E: Negative traffic count rejection
+    // Edge Case 5: Negative traffic count rejection
     std::cout << "[Edge Case 5] Negative Traffic Count Rejection (-10):\n";
     bool negCount = ft.setCount(2, -10);
     std::cout << "              Handled Gracefully: " << (!negCount ? "[PASS]" : "[FAIL]") << "\n";
+    assert(!negCount);
 
-    // Edge Case F: Congestion Threshold Equality Check
+    // Edge Case 6: Congestion Threshold Equality Check (Sum = 63, Threshold = 63)
     long long exactThreshold = 63;
     std::string eqStatus = TrafficFenwickTree::detectCongestion(63, exactThreshold);
     std::cout << "[Edge Case 6] Threshold Equality (Sum = 63, Threshold = 63): "
-              << eqStatus << " (Expected: NORMAL since <= threshold) -> "
-              << (eqStatus == "NORMAL" ? "[PASS]" : "[FAIL]") << "\n";
+              << eqStatus << " (Expected: POTENTIALLY CONGESTED since >= threshold) -> "
+              << (eqStatus == "POTENTIALLY CONGESTED" ? "[PASS]" : "[FAIL]") << "\n";
+    assert(eqStatus == "POTENTIALLY CONGESTED");
+
+    // Edge Case 7: Full Corridor Range Query [1..8]
+    long long fullRangeSum = ft.rangeSum(1, 8);
+    std::cout << "[Edge Case 7] Full Corridor Range Query [1..8]: " << fullRangeSum 
+              << " (Expected: 101) -> " 
+              << (fullRangeSum == 101 ? "[PASS]" : "[FAIL]") << "\n";
+    assert(fullRangeSum == 101);
+
+    // Edge Case 8: Invalid Range Query L < 1 [0..3]
+    std::cout << "[Edge Case 8] Invalid Range Query L < 1 [0..3]:\n";
+    long long lowerOobSum = ft.rangeSum(0, 3);
+    std::cout << "              Handled Gracefully: " << (lowerOobSum == -1 ? "[PASS]" : "[FAIL]") << "\n";
+    assert(lowerOobSum == -1);
+
+    // Edge Case 9: Invalid Range Query R > n [5..9]
+    std::cout << "[Edge Case 9] Invalid Range Query R > n [5..9]:\n";
+    long long upperOobSum = ft.rangeSum(5, 9);
+    std::cout << "              Handled Gracefully: " << (upperOobSum == -1 ? "[PASS]" : "[FAIL]") << "\n";
+    assert(upperOobSum == -1);
+
+    // Edge Case 10: Congestion Below Threshold (Sum = 63, Threshold = 70)
+    std::string normalStatus = TrafficFenwickTree::detectCongestion(63, 70);
+    std::cout << "[Edge Case 10] Congestion Below Threshold (Sum = 63, Threshold = 70): "
+              << normalStatus << " (Expected: NORMAL since < threshold) -> "
+              << (normalStatus == "NORMAL" ? "[PASS]" : "[FAIL]") << "\n";
+    assert(normalStatus == "NORMAL");
+
+    // Edge Case 11: Negative Threshold Rejection
+    std::cout << "[Edge Case 11] Negative Threshold Rejection (Threshold = -5):\n";
+    std::string negThreshStatus = TrafficFenwickTree::detectCongestion(63, -5);
+    std::cout << "               Handled Gracefully: " << (negThreshStatus == "INVALID" ? "[PASS]" : "[FAIL]") << "\n";
+    assert(negThreshStatus == "INVALID");
+
+    // Edge Case 12: Range Congestion Query with Invalid Range [6..3]
+    std::cout << "[Edge Case 12] Range Congestion Query with Invalid Range [6..3]:\n";
+    std::string invalidRangeCongestion = ft.detectCongestion(6, 3, 55);
+    std::cout << "               Handled Gracefully: " << (invalidRangeCongestion == "INVALID" ? "[PASS]" : "[FAIL]") << "\n";
+    assert(invalidRangeCongestion == "INVALID");
 
     // Member 2 Core Operations Invariant Verification
     assert(TrafficFenwickTree::lowbit(1) == 1);
@@ -623,6 +768,14 @@ int main() {
     assert(ft.prefixSum(0) == 0);
     assert(ft.prefixSum(-5) == 0);
     assert(ft.prefixSum(100) == ft.prefixSum(8));
+
+    // Member 3 Range Sum Invariant Verification
+    for (int i = 1; i <= 8; ++i) {
+        assert(ft.rangeSum(i, i) == ft.getTrafficCount(i));
+    }
+    for (int k = 1; k <= 8; ++k) {
+        assert(ft.rangeSum(1, k) == ft.prefixSum(k));
+    }
 
     printSectionHeader("DEMONSTRATION SUMMARY");
     std::cout << "All benchmark tests, bit states, and edge validations passed successfully.\n";
