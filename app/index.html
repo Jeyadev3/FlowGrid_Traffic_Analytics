@@ -25,9 +25,9 @@
         </div>
       </div>
       <div class="header-actions">
-        <span class="status-indicator">
-          <span class="status-dot"></span>
-          <span id="engine-status">O(log n) Engine Online</span>
+        <span class="status-indicator" id="status-pill-wrap">
+          <span class="status-dot" id="engine-dot"></span>
+          <span id="engine-status">Connecting to C++ Backend...</span>
         </span>
         <button id="btn-run-demo" class="btn btn-secondary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -165,9 +165,11 @@
               </div>
               <div class="breakdown-verdict">
                 <span>Congestion Status:</span>
-                <span class="status-pill status-normal" id="query-status-badge">NORMAL (49 &le; 55)</span>
+                <span class="status-pill status-normal" id="query-status-badge">NORMAL (49 &lt; 55)</span>
               </div>
             </div>
+
+            <div id="validation-alert" class="validation-alert hidden"></div>
           </div>
         </div>
       </section>
@@ -177,9 +179,10 @@
         <div class="card-header">
           <div class="card-title-group">
             <h3>Live Road Segments (Raw Array <code>trafficCounts[1..8]</code>)</h3>
-            <p class="card-description">Current real-world physical traffic sensor readings across the corridor.</p>
+            <p class="card-description">Current real-world physical traffic sensor readings. <em>Click any card to select for point update.</em></p>
           </div>
           <div class="legend">
+            <span class="legend-item"><span class="legend-box selected"></span> Selected</span>
             <span class="legend-item"><span class="legend-box in-query"></span> In Active Range [L..R]</span>
             <span class="legend-item"><span class="legend-box updated"></span> Recently Updated</span>
           </div>
@@ -251,11 +254,11 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-left">
-        <strong>FlowGrid &bull; Dynamic Traffic Analytics</strong> &mdash; Data Structures &amp; Algorithms Case Study
+        <strong>FlowGrid &bull; Dynamic Traffic Analytics</strong> &mdash; DSA Case Study (Member 4 Integration)
       </div>
       <div class="footer-right">
         <span>Evaluator Verification Mode: Active</span> &bull;
-        <span>1-Based Fenwick Tree Core</span>
+        <span id="footer-engine-label">1-Based C++ Fenwick Tree Engine</span>
       </div>
     </footer>
   </div>
