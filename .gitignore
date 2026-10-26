@@ -1,0 +1,26 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.o
+*.obj
+*.out
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.dist-info/
+.venv/
+env/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
