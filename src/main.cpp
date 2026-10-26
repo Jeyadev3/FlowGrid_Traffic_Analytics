@@ -3,6 +3,7 @@
 #include <string>
 #include <iomanip>
 #include <stdexcept>
+#include <cassert>
 
 /**
  * ============================================================================
@@ -61,14 +62,8 @@ public:
         bit.assign(n + 1, 0LL);
     }
 
-    /**
-     * Isolates the lowest set bit (least significant 1-bit).
-     * Mathematical Formula: lowbit(x) = x & (-x)
-     * Utilizes two's complement representation: -x = (~x) + 1.
-     */
-    static int lowbit(int x) {
-        return x & (-x);
-    }
+    // Note: lowbit(i) is Member 2's core bitwise operation (Task 1).
+    // Reused here by buildFenwick(). Defined below under MEMBER 2.
 
     /**
      * Member 1: Traffic Data Validation
@@ -188,12 +183,75 @@ public:
     }
 
     // ========================================================================
-    // MEMBER 2: DYNAMIC POINT UPDATE & TRAFFIC SETTING (O(log n))
+    // MEMBER 2: FENWICK TREE CORE OPERATIONS (O(log n))
     // ========================================================================
 
     /**
-     * Updates segment index by a relative delta.
-     * Traverses up the tree by adding lowbit(i).
+     * Member 2 (Task 1): lowbit Operator
+     * ----------------------------------
+     * Isolates the lowest set bit (least significant 1-bit) of an integer index
+     * using two's complement bitwise arithmetic: lowbit(i) = i & (-i).
+     * 
+     * Mathematical Formula:
+     *     lowbit(i) = i & (-i)
+     * 
+     * Binary Representation Mechanics:
+     *     In standard two's complement representation, negating an integer i
+     *     inverts all bits and adds 1: -i = (~i) + 1.
+     *     Bitwise ANDing i with -i zeros out all higher-order bits, preserving
+     *     strictly the single lowest 1-bit.
+     * 
+     * Algorithmic Roles in FlowGrid:
+     *   1. Interval Length: Node bit[i] stores the cumulative volume over exactly
+     *      lowbit(i) road segments: [i - lowbit(i) + 1 .. i].
+     *   2. Point Update Traversal: parent = i + lowbit(i) (ascends tree in O(log n)).
+     *   3. Prefix Sum Traversal: prev = i - lowbit(i) (descends tree in O(log n)).
+     *   4. Linear Build (Member 1): parent = i + lowbit(i) (reused in buildFenwick).
+     * 
+     * Complexity:
+     *   - Time Complexity: O(1) bitwise operations.
+     *   - Space Complexity: O(1).
+     * 
+     * @param i 1-based index (road segment number).
+     * @return Value of the least significant set bit (power of 2).
+     */
+    static int lowbit(int i) {
+        return i & (-i);
+    }
+
+    /**
+     * Member 2 (Task 2 & 5): Dynamic Point Update (O(log n))
+     * ------------------------------------------------------
+     * Updates the Fenwick Tree by adding a relative difference (delta) to
+     * segment idx and propagating this change to all ancestor nodes that
+     * cover idx in their responsibility intervals.
+     * 
+     * Algorithmic Traversal:
+     *   - Start at index i = idx.
+     *   - In each iteration, add delta to bit[i]: bit[i] += delta.
+     *   - Advance to the immediate parent node in the Fenwick Tree hierarchy
+     *     by adding the lowest set bit: i += lowbit(i).
+     *   - Terminate when i exceeds the corridor capacity n.
+     * 
+     * Trace for Benchmark Dataset (n = 8, idx = 5, delta = +14):
+     *   Iteration 1: i = 5 (0101_2), lowbit(5) = 1 -> bit[5] += 14 (20 -> 34)
+     *                Next i = 5 + 1 = 6 (0110_2)
+     *   Iteration 2: i = 6 (0110_2), lowbit(6) = 2 -> bit[6] += 14 (25 -> 39)
+     *                Next i = 6 + 2 = 8 (1000_2)
+     *   Iteration 3: i = 8 (1000_2), lowbit(8) = 8 -> bit[8] += 14 (87 -> 101)
+     *                Next i = 8 + 8 = 16 > 8 (terminates traversal)
+     * 
+     * Safety & Validation:
+     *   - Validates that idx satisfies 1-based bounds: 1 <= idx <= n.
+     *   - If idx is out of bounds, logs an error to std::cerr and returns false safely.
+     * 
+     * Complexity:
+     *   - Time Complexity: O(log n) tree traversal (at most floor(log2 n) + 1 additions).
+     *   - Space Complexity: O(1) auxiliary space.
+     * 
+     * @param idx 1-based segment index to update (1 to n).
+     * @param delta Difference to add (+surge / -clearance).
+     * @return true if update was successful; false if idx is out of bounds.
      */
     bool update(int idx, int delta) {
         if (idx < 1 || idx > n) {
@@ -209,8 +267,39 @@ public:
     }
 
     /**
-     * Sets absolute traffic count for segment idx.
-     * Computes delta = newCount - trafficCounts[idx], updates raw array and BIT.
+     * Member 2 (Task 3, 5 & 6): Absolute Traffic Count Setting (O(log n))
+     * -------------------------------------------------------------------
+     * Sets the absolute vehicular traffic count for a specific road segment idx.
+     * Automatically calculates the relative change (delta) from the segment's
+     * existing count, updates the raw traffic count array, and propagates the delta
+     * to the Fenwick Tree via update().
+     * 
+     * Mathematical Formula:
+     *     delta = newCount - trafficCounts[idx]
+     * 
+     * Preconditions & Validations:
+     *   1. Index Bounds: 1 <= idx <= n. Out-of-bounds indices are rejected safely.
+     *   2. Non-negative Counts: Traffic volume cannot be negative (newCount >= 0).
+     *      Negative counts are safely rejected without modifying data.
+     * 
+     * State Synchronization:
+     *   - Maintains 100% synchronization between original traffic array (trafficCounts)
+     *     and the Fenwick Tree (bit).
+     * 
+     * Trace for Benchmark Case (Segment 5 from 20 to 34):
+     *   - oldCount = trafficCounts[5] = 20
+     *   - newCount = 34
+     *   - delta    = 34 - 20 = +14
+     *   - trafficCounts[5] becomes 34
+     *   - update(5, 14) updates bit[5], bit[6], bit[8]
+     * 
+     * Complexity:
+     *   - Time Complexity: O(log n) due to update() traversal.
+     *   - Space Complexity: O(1) auxiliary space.
+     * 
+     * @param idx 1-based segment index (1 to n).
+     * @param newCount New non-negative vehicular count.
+     * @return true if successfully validated and updated; false otherwise.
      */
     bool setCount(int idx, int newCount) {
         if (idx < 1 || idx > n) {
@@ -229,13 +318,47 @@ public:
         return update(idx, delta);
     }
 
-    // ========================================================================
-    // MEMBER 3: PREFIX SUM & RANGE SUM CORRIDOR QUERIES (O(log n))
-    // ========================================================================
-
     /**
-     * Computes prefix sum of traffic counts from segment 1 to idx.
-     * Traverses by subtracting lowbit(i).
+     * Member 2 (Task 4 & 5): Prefix Sum Query (O(log n))
+     * --------------------------------------------------
+     * Computes the cumulative vehicular traffic volume across road segments
+     * from segment 1 up to segment idx in O(log n) time.
+     * 
+     * Mathematical Formula:
+     *     prefixSum(idx) = sum_{k=1}^{idx} trafficCounts[k]
+     * 
+     * Algorithmic Traversal:
+     *   - Start at index i = idx.
+     *   - In each iteration, add bit[i] to the cumulative sum: sum += bit[i].
+     *   - Move to the preceding disjoint interval in the Fenwick Tree by
+     *     subtracting the lowest set bit: i -= lowbit(i).
+     *   - Terminate when i reaches 0 (all intervals accumulated).
+     * 
+     * Mathematical Trace for Benchmark Dataset (n = 8):
+     *   prefixSum(6) [Before Update: bit = {12, 19, 15, 43, 20, 25, 11, 87}]:
+     *     Iteration 1: i = 6 (0110_2), sum += bit[6] (25) = 25
+     *                  Next i = 6 - lowbit(6) = 6 - 2 = 4 (0100_2)
+     *     Iteration 2: i = 4 (0100_2), sum += bit[4] (43) = 25 + 43 = 68
+     *                  Next i = 4 - lowbit(4) = 4 - 4 = 0 (terminate)
+     *     Result = 68 vehicles.
+     * 
+     *   prefixSum(6) [After Segment 5 Updated to 34: bit = {12, 19, 15, 43, 34, 39, 11, 101}]:
+     *     Iteration 1: i = 6, sum += bit[6] (39) = 39
+     *                  Next i = 6 - 2 = 4
+     *     Iteration 2: i = 4, sum += bit[4] (43) = 39 + 43 = 82
+     *                  Next i = 4 - 4 = 0 (terminate)
+     *     Result = 82 vehicles.
+     * 
+     * Boundary Safety:
+     *   - If idx < 1, returns 0 (sum over empty corridor [1 .. 0] is 0).
+     *   - If idx > n, clamps idx to n (sums entire monitored corridor [1 .. n]).
+     * 
+     * Complexity:
+     *   - Time Complexity: O(log n) tree traversal (at most floor(log2 n) + 1 additions).
+     *   - Space Complexity: O(1) auxiliary space.
+     * 
+     * @param idx Upper 1-based segment index of the prefix range [1 .. idx].
+     * @return Cumulative traffic count as a 64-bit integer (long long).
      */
     long long prefixSum(int idx) const {
         if (idx < 1) return 0;
@@ -247,6 +370,10 @@ public:
         }
         return sum;
     }
+
+    // ========================================================================
+    // MEMBER 3: RANGE SUM CORRIDOR QUERIES (O(log n))
+    // ========================================================================
 
     /**
      * Computes range sum of traffic counts for segments [left, right].
@@ -398,6 +525,7 @@ int main() {
     bool passQ1 = (sumQ1 == 49 && statusQ1 == "NORMAL");
     std::cout << "Benchmark Check          : " 
               << (passQ1 ? "[PASS] Expected 49 and NORMAL" : "[FAIL] Output deviated") << "\n";
+    assert(ft.prefixSum(6) == 68); // Member 2: prefixSum(6) before update must equal 68
 
     // ------------------------------------------------------------------------
     // Dynamic Point Update: Segment 5 from 20 to 34
@@ -424,6 +552,7 @@ int main() {
     bool updatedBitMatch = verifyBit(ft.getBitArray(), expectedUpdatedBit);
     std::cout << "Updated BIT Array Verification: " 
               << (updatedBitMatch ? "[PASS] Exact Match" : "[FAIL] Mismatch Detected") << "\n";
+    assert(ft.prefixSum(6) == 82); // Member 2: prefixSum(6) after update must equal 82
 
     // ------------------------------------------------------------------------
     // Re-Query: Segments 3 to 6
@@ -481,6 +610,19 @@ int main() {
     std::cout << "[Edge Case 6] Threshold Equality (Sum = 63, Threshold = 63): "
               << eqStatus << " (Expected: NORMAL since <= threshold) -> "
               << (eqStatus == "NORMAL" ? "[PASS]" : "[FAIL]") << "\n";
+
+    // Member 2 Core Operations Invariant Verification
+    assert(TrafficFenwickTree::lowbit(1) == 1);
+    assert(TrafficFenwickTree::lowbit(2) == 2);
+    assert(TrafficFenwickTree::lowbit(3) == 1);
+    assert(TrafficFenwickTree::lowbit(4) == 4);
+    assert(TrafficFenwickTree::lowbit(5) == 1);
+    assert(TrafficFenwickTree::lowbit(6) == 2);
+    assert(TrafficFenwickTree::lowbit(7) == 1);
+    assert(TrafficFenwickTree::lowbit(8) == 8);
+    assert(ft.prefixSum(0) == 0);
+    assert(ft.prefixSum(-5) == 0);
+    assert(ft.prefixSum(100) == ft.prefixSum(8));
 
     printSectionHeader("DEMONSTRATION SUMMARY");
     std::cout << "All benchmark tests, bit states, and edge validations passed successfully.\n";
